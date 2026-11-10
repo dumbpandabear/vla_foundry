@@ -26,10 +26,18 @@ Git bundle, or an approved internal artifact store for this work.
 
 ## Source branch
 
-Check out `minecraft-vla-d29-fair-cw`. It contains the streaming index builder,
-raw VPT dataloader, Discrete-29 model and export path, telemetry, tests, and the
-Richmond launchers. A Git bundle is also produced as a fallback when the branch
-cannot be fetched from the remote.
+Check out
+[`minecraft-vla-d29-fair-cw`](https://github.com/dumbpandabear/vla_foundry/tree/minecraft-vla-d29-fair-cw).
+It contains the streaming index builder, raw VPT dataloader, Discrete-29 model
+and export path, telemetry, tests, and the Richmond launchers:
+
+```bash
+git clone --branch minecraft-vla-d29-fair-cw --single-branch \
+  https://github.com/dumbpandabear/vla_foundry.git
+```
+
+A Git bundle is also produced as a fallback when the branch cannot be fetched
+from GitHub.
 
 The verified fallback bundle is:
 
