@@ -187,6 +187,9 @@ bash examples/minecraft/preflight_fair_cw96.sh
 
 It checks all 24 nodes independently for four CUDA devices and visibility of
 the repository, raw VPT corpus, checkpoint, model, and all index manifests.
+Each node also validates manifest/audit counts and decodes one indexed sample
+from every split, proving that PyAV, MP4 reads, raw-action reads, and alignment
+work before the full allocation starts training.
 
 Before reserving all 24 nodes, run a one-node throughput/correctness smoke by
 overriding the expected world size and training budget:

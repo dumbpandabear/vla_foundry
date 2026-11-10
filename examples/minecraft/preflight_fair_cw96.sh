@@ -37,6 +37,11 @@ assert torch.cuda.is_available(), \"CUDA is unavailable\"
 assert torch.cuda.device_count() == expected, (torch.cuda.device_count(), expected)
 print(socket.gethostname(), platform.machine(), torch.__version__, torch.version.cuda, torch.cuda.device_count())
 "
+PYTHONPATH="$VLA_REPO_ROOT" "$VLA_REPO_ROOT/.venv/bin/python" -m \
+  vla_foundry.data.minecraft.verify_stream_index \
+  --index "$VLA_DATA" \
+  --data-root "$VLA_SOURCE" \
+  --decode-per-split 1
 '
 
 echo "FAIR-CW preflight passed on $SLURM_NNODES nodes / $VLA_WORLD_SIZE GPUs"
