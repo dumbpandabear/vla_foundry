@@ -31,6 +31,20 @@ raw VPT dataloader, Discrete-29 model and export path, telemetry, tests, and the
 Richmond launchers. A Git bundle is also produced as a fallback when the branch
 cannot be fetched from the remote.
 
+The verified fallback bundle is:
+
+```text
+/storage/home/ericli11/minecraft-vla-poc/transfer/minecraft-vla-d29-fair-cw.bundle
+```
+
+From a clone containing current `origin/main`, fetch it with:
+
+```bash
+git bundle verify /path/to/minecraft-vla-d29-fair-cw.bundle
+git fetch /path/to/minecraft-vla-d29-fair-cw.bundle minecraft-vla-d29-fair-cw
+git switch -c minecraft-vla-d29-fair-cw FETCH_HEAD
+```
+
 ## ARM64 environment
 
 Richmond (`fair-cw-use2-1`) is `aarch64`. Do not copy or reuse the x86_64
