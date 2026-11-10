@@ -270,3 +270,20 @@ class RoboticsDataParams(DataParams):
             object.__setattr__(self, "lowdim_past_timesteps", self.normalization.lowdim_past_timesteps)
         if self.lowdim_future_timesteps is None:
             object.__setattr__(self, "lowdim_future_timesteps", self.normalization.lowdim_future_timesteps)
+
+
+@register_data_params("minecraft_vpt_stream")
+@dataclass(frozen=True)
+class MinecraftVPTStreamDataParams(RoboticsDataParams):
+    """Robotics parameters for decoding raw VPT clips during training."""
+
+    vpt_data_root: str = field(default=None)
+    vpt_horizon: int = field(default=15)
+    vpt_stride: int = field(default=4)
+
+    def __post_init__(self):
+        super().__post_init__()
+        if not self.vpt_data_root:
+            raise ValueError("minecraft_vpt_stream requires vpt_data_root")
+        if self.vpt_horizon <= 0 or self.vpt_stride <= 0:
+            raise ValueError("vpt_horizon and vpt_stride must be positive")

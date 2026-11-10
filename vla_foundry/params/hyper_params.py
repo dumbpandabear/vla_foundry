@@ -22,6 +22,7 @@ class HyperParams(BaseParams):
     beta2: float = field(default=0.95)
     eps: float = field(default=1.0e-8)
     loss_function: str = field(default="cross_entropy")
+    class_weights: list[float] | None = field(default=None)
     z_loss_coefficient: float = field(default=0.0)
     grad_clip_norm: float = field(default=None)
     grad_checkpointing: bool = field(default=False)

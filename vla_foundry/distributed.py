@@ -142,6 +142,17 @@ def move_buffers_to_device(model, device, verbose=False):
         print(f"=> Moved {moved_count} buffers to {device}")
 
 
+def move_model_to_device(model, device, cfg):
+    """Move a model without downcasting FP32 adapters during AMP training."""
+    backbone_params = getattr(cfg.model, "vision_language_backbone", None)
+    if cfg.hparams.precision_amp and getattr(backbone_params, "pretrained_dtype", None):
+        # Pretrained backbones already carry their requested low-precision
+        # weights.  A blanket dtype conversion would also downcast LoRA and
+        # action-head parameters that intentionally remain FP32.
+        return model.to(device)
+    return model.to(device, dtype=get_model_precision(cfg))
+
+
 def wrap_fsdp_ddp(model, device, cfg):
     # Move all buffers to device before FSDP wrapping.
     # Some HuggingFace models (like SigLIP) have buffers (e.g., position_ids) that
@@ -232,7 +243,7 @@ def wrap_fsdp_ddp(model, device, cfg):
         print(f"After FSDP {torch.cuda.memory_allocated() / 1024**3:.3} GB on rank {cfg.distributed.rank}")
     else:
         # Move model to device before DDP wrapping
-        model = model.to(device, dtype=get_model_precision(cfg))
+        model = move_model_to_device(model, device, cfg)
 
         ddp_args = {
             "find_unused_parameters": True,  # Model has unused parameters (e.g., CLIP logit scale)

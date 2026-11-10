@@ -1,0 +1,105 @@
+name: minecraft-qwen3-lora-poc
+save_path: /storage/home/ericli11/minecraft-vla-poc/runs
+wandb: false
+db_logging: false
+total_train_samples: 100000
+num_checkpoints: 5
+total_val_samples: 256
+validate_on_resume: true
+log_every_n_steps: 20
+model:
+  type: diffusion_policy
+  vision_language_backbone:
+    type: vlm_backbone
+    hf_pretrained: /checkpoint/data/ericli11/models/Qwen3-VL-30B-A3B-Thinking
+    num_vlm_layers_to_use: 2
+    freeze: false
+    pretrained_dtype: bfloat16
+    attn_implementation: sdpa
+    lora_rank: 16
+    lora_alpha: 32
+    lora_dropout: 0.05
+  transformer:
+    type: transformer
+    hidden_dim: 384
+    n_layers: 6
+    n_heads: 6
+    vocab_size: 0
+    max_seq_len: 1024
+    is_causal: false
+  noise_scheduler:
+    num_timesteps: 1000
+    clamp_range:
+    - -1
+    - 1
+  use_flow_matching_scheduler: true
+  diffusion_step_conditioning: add
+  input_noise_std: 0.0
+  num_action_head_repeats: 1
+  save_trainable_only: true
+data:
+  type: robotics
+  dataset_manifest:
+  - /storage/home/ericli11/minecraft-vla-poc/dataset-v2/train/manifest.jsonl
+  dataset_statistics:
+  - /storage/home/ericli11/minecraft-vla-poc/dataset-v2/train/stats.json
+  dataset_modality:
+  - robotics
+  dataset_weighting:
+  - 1.0
+  val_dataset_manifest:
+  - /storage/home/ericli11/minecraft-vla-poc/dataset-v2/val/manifest.jsonl
+  val_dataset_statistics:
+  - /storage/home/ericli11/minecraft-vla-poc/dataset-v2/val/stats.json
+  val_dataset_weighting:
+  - 1.0
+  processor: /checkpoint/data/ericli11/models/Qwen3-VL-30B-A3B-Thinking
+  image_size: 224
+  img_num_tokens: 196
+  seq_len: 1024
+  max_text_seq_len: 1024
+  camera_names:
+  - pov
+  image_indices:
+  - -1
+  - 0
+  image_names:
+  - pov_t-1
+  - pov_t0
+  action_fields:
+  - vpt_actions
+  proprioception_fields: []
+  action_dim: 25
+  proprioception_dim: 0
+  lowdim_past_timesteps: 0
+  lowdim_future_timesteps: 14
+  normalization:
+    enabled: false
+  augmentation:
+    enabled: false
+  allow_multiple_epochs: true
+  num_workers: 0
+  prefetch_factor: 2
+  shuffle_buffer_size: 2048
+  shuffle_initial: 512
+  processor_kwargs:
+    images_kwargs:
+      size:
+        shortest_edge: 50176
+        longest_edge: 50176
+distributed:
+  fsdp: false
+hparams:
+  per_gpu_batch_size: 32
+  global_batch_size: 32
+  lr: 0.0001
+  lr_scheduler: cosine
+  warmup: '200'
+  beta1: 0.9
+  beta2: 0.95
+  wd: 0.01
+  loss_function: mse
+  precision: amp_bf16
+  torchcompile: false
+  grad_clip_norm: 1.0
+  grad_checkpointing: true

@@ -1,0 +1,19 @@
+type: vlm
+image_token_id: 1
+processor: minecraft_bytes
+vit:
+  type: vit
+  img_size: 224
+  patch_size: 28
+  hidden_dim: 64
+  inter_dim: 256
+  n_heads: 4
+  n_layers: 2
+transformer:
+  type: transformer
+  hidden_dim: 128
+  n_layers: 2
+  n_heads: 4
+  vocab_size: 258
+  max_seq_len: 512
+  is_causal: true

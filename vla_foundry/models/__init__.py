@@ -11,6 +11,7 @@ New models should be registered in their respective files or subdirectories.
 import vla_foundry.models.batch_handlers
 import vla_foundry.models.diffusion  # registers "stable_diffusion"
 import vla_foundry.models.diffusion_policy  # registers "diffusion_policy", "clip_hf", "clip_openclip"
+import vla_foundry.models.minecraft_discrete  # registers categorical D29 policy and batch handler
 
 # Import all model modules to trigger their registrations
 # Individual model files

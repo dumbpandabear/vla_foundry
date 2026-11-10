@@ -29,6 +29,7 @@ class ModelParams(draccus.ChoiceRegistry, BaseParams):
     resume_from_checkpoint: str = field(default=None)
     resume_weights_only: bool = field(default=False)
     freeze: bool = field(default=False)
+    save_trainable_only: bool = field(default=False)
 
     def __init__(self):
         raise NotImplementedError("ModelParams should not be instantiated directly. Use a subclass with model.type=...")
@@ -163,7 +164,12 @@ class VLMParams(ModelParams):
 @register_model_params("vlm_hf")
 @dataclass(frozen=True)
 class VLMHFParams(TransformerHFParams):
-    pass
+    pretrained_dtype: str | None = field(default=None)
+    attn_implementation: str | None = field(default=None)
+    lora_rank: int = field(default=0)
+    lora_alpha: int = field(default=32)
+    lora_dropout: float = field(default=0.05)
+    lora_target_modules: list[str] = field(default_factory=lambda: ["q_proj", "k_proj", "v_proj", "o_proj"])
 
 
 @register_model_params("unet")
@@ -273,6 +279,17 @@ class StableDiffusionParams(ModelParams):
     @property
     def image_size(self):
         return self.unet.image_size
+
+
+@register_model_params("minecraft_discrete_policy")
+@dataclass(frozen=True)
+class MinecraftDiscretePolicyParams(ModelParams):
+    vision_language_backbone: VLMBackboneParams = field(default_factory=VLMBackboneParams)
+    transformer: TransformerParams = field(default_factory=TransformerParams)
+    horizon: int = field(default=15)
+    # None preserves the VPT-derived 21-action mask. Native-D29 Craftium
+    # demonstrations can opt into all IDs after supplying positive examples.
+    supported_action_ids: list[int] | None = field(default=None)
 
 
 @register_model_params("diffusion_policy")

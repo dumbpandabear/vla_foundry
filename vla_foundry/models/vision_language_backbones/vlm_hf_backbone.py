@@ -35,6 +35,10 @@ class VLMHFBackboneWrapper(BaseBackboneWrapper):
             embeddings = self._model.model.get_input_embeddings()
             mean_emb = embeddings.weight[:-1].mean(dim=0)
             embeddings.weight[-1] = mean_emb
+        self._model.enable_lora(self._action_token_id)
+
+    def set_grad_checkpointing(self, enable=True):
+        self._model.set_grad_checkpointing(enable)
 
     def get_conditioning_embeddings_dim(self) -> int:
         """Return dimension for condition embeddings (with layers concatenated)."""
@@ -102,6 +106,10 @@ class VLMHFBackboneWrapper(BaseBackboneWrapper):
 
         # VLM needs hidden states for action token embedding extraction
         kwargs["output_hidden_states"] = True
+        kwargs["use_cache"] = False
+        if self._is_qwen_style:
+            # Only the probe hidden states are used, so avoid full-sequence vocabulary logits.
+            kwargs["logits_to_keep"] = 1
 
         return input_ids_with_action, pixel_values, attention_mask_with_action, attention_mask_images, kwargs
 

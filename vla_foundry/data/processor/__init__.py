@@ -95,7 +95,11 @@ def apply_chat_template(processor, num_images, text):
 
 
 def get_processor(data_params: DataParams):
-    if data_params.processor == "stable_diffusion":
+    if data_params.processor == "minecraft_bytes":
+        from vla_foundry.data.minecraft.processor import MinecraftByteProcessor
+
+        return MinecraftByteProcessor(data_params.image_size, data_params.img_num_tokens)
+    elif data_params.processor == "stable_diffusion":
         return StableDiffusionProcessor(
             image_size=data_params.image_size,
             max_length=data_params.seq_len,

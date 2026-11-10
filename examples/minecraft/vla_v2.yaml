@@ -1,0 +1,77 @@
+name: minecraft-vla-v2
+save_path: /storage/home/ericli11/minecraft-vla-poc/runs
+wandb: false
+db_logging: false
+total_train_samples: 2000000
+num_checkpoints: 10
+total_val_samples: 4096
+log_every_n_steps: 100
+model:
+  type: diffusion_policy
+  vision_language_backbone:
+    type: vlm_foundry_backbone
+    vlm_experiment_dir: examples/minecraft/backbone_v2
+    num_vlm_layers_to_use: 6
+    freeze: false
+  transformer:
+    type: transformer
+    hidden_dim: 384
+    n_layers: 6
+    n_heads: 6
+    vocab_size: 0
+    max_seq_len: 1024
+    is_causal: false
+  noise_scheduler:
+    num_timesteps: 1000
+    clamp_range: [-1, 1]
+  use_flow_matching_scheduler: true
+  diffusion_step_conditioning: add
+  input_noise_std: 0.0
+  num_action_head_repeats: 1
+data:
+  type: robotics
+  dataset_manifest: [/storage/home/ericli11/minecraft-vla-poc/dataset-v2/train/manifest.jsonl]
+  dataset_statistics: [/storage/home/ericli11/minecraft-vla-poc/dataset-v2/train/stats.json]
+  dataset_modality: [robotics]
+  dataset_weighting: [1.0]
+  val_dataset_manifest: [/storage/home/ericli11/minecraft-vla-poc/dataset-v2/val/manifest.jsonl]
+  val_dataset_statistics: [/storage/home/ericli11/minecraft-vla-poc/dataset-v2/val/stats.json]
+  val_dataset_weighting: [1.0]
+  processor: minecraft_bytes
+  image_size: 224
+  img_num_tokens: 196
+  seq_len: 1024
+  max_text_seq_len: 1024
+  camera_names: [pov]
+  image_indices: [-1, 0]
+  image_names: [pov_t-1, pov_t0]
+  action_fields: [vpt_actions]
+  proprioception_fields: []
+  action_dim: 25
+  proprioception_dim: 0
+  lowdim_past_timesteps: 0
+  lowdim_future_timesteps: 14
+  normalization:
+    enabled: false
+  augmentation:
+    enabled: false
+  allow_multiple_epochs: true
+  num_workers: 8
+  prefetch_factor: 2
+  shuffle_buffer_size: 2048
+  shuffle_initial: 512
+distributed:
+  fsdp: false
+hparams:
+  per_gpu_batch_size: 64
+  global_batch_size: 64
+  lr: 0.0003
+  lr_scheduler: cosine
+  warmup: '1000'
+  beta1: 0.9
+  beta2: 0.95
+  wd: 0.01
+  loss_function: mse
+  precision: amp_bf16
+  torchcompile: false
+  grad_clip_norm: 1.0

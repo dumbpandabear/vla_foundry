@@ -245,6 +245,18 @@ class TestGetLossFunction:
         loss = loss_fn(logits, targets, mask=mask)
         assert loss.dim() == 0
 
+    def test_cross_entropy_with_class_weights(self):
+        hparams = Mock()
+        hparams.z_loss_coefficient = 0.0
+        hparams.class_weights = [1.0, 4.0]
+
+        loss_fn = get_loss_function("cross_entropy", hparams)
+        logits = torch.tensor([[2.0, -1.0], [2.0, -1.0]])
+        targets = torch.tensor([0, 1])
+
+        expected = F.cross_entropy(logits, targets, weight=torch.tensor(hparams.class_weights))
+        assert torch.allclose(loss_fn(logits, targets), expected)
+
     def test_mse_loss(self):
         """Test MSE loss creation."""
         hparams = Mock()

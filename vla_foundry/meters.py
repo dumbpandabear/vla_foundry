@@ -1,6 +1,8 @@
 import logging
 import math
 
+import torch
+
 
 class AverageMeter:
     """Computes and stores the average and current value"""
@@ -31,6 +33,7 @@ class Metrics:
             "optim_step_time": AverageMeter(),
             "sync_time": AverageMeter(),
             "loss": AverageMeter(),
+            "grad_norm": AverageMeter(),
         }
 
     def update_and_log_state(
@@ -72,6 +75,7 @@ class Metrics:
         # Save train loss / etc. Using non avg meter values as loggers have their own smoothing
         self.state = {
             "loss": self.stats["loss"].val,
+            "grad_norm": self.stats["grad_norm"].val,
             "data_time": self.stats["data_time"].val,
             "batch_time": self.stats["batch_time"].val,
             "forward_time": self.stats["forward_time"].val,
@@ -83,11 +87,23 @@ class Metrics:
             "tokens_per_second": tokens_per_second,
             "tokens_per_second_per_gpu": tokens_per_second_per_gpu,
             "lr": lr,
-            "tokens": (step + 1) * cfg.hparams.global_batch_size * cfg.data.seq_len,
-            "samples": (step + 1) * cfg.hparams.global_batch_size,
+            # ``step`` has already been incremented after this optimizer step.
+            "tokens": step * cfg.hparams.global_batch_size * cfg.data.seq_len,
+            "samples": step * cfg.hparams.global_batch_size,
             "expected_steps_epoch": dataloader.dataloader.num_batches,
             "seen_steps_epoch": batch_count,
+            "checkpoint": checkpoint_num,
+            "checkpoint_progress_pct": percent_complete,
+            "global_step": step,
         }
+        if torch.cuda.is_available():
+            self.state.update(
+                {
+                    "gpu_memory_allocated_gib": torch.cuda.memory_allocated() / 2**30,
+                    "gpu_memory_reserved_gib": torch.cuda.memory_reserved() / 2**30,
+                    "gpu_max_memory_allocated_gib": torch.cuda.max_memory_allocated() / 2**30,
+                }
+            )
 
         if cfg.wandb:
             import wandb
@@ -95,6 +111,7 @@ class Metrics:
             log_dict = {f"train/{name}": val for name, val in self.state.items()}
             log_dict["tokens"] = self.state["tokens"]
             log_dict["samples"] = self.state["samples"]
+            log_dict["global_step"] = step
             wandb.log(log_dict, step=step)
 
         self.reset()

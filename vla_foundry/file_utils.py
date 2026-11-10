@@ -358,6 +358,18 @@ def save_checkpoint(
     if cfg.distributed.rank > 0:
         return None
 
+    trainable_only = getattr(cfg.model, "save_trainable_only", False)
+    if trainable_only:
+        if cfg.distributed.fsdp or ema_model is not None:
+            raise ValueError("Compact adapter checkpoints currently require non-FSDP training without EMA")
+        unwrapped_model = get_unwrapped_model(model)
+        backbone_model = unwrapped_model.vision_language_backbone._model
+        if not getattr(backbone_model, "pretrained_loaded", False):
+            raise ValueError("Compact checkpoints require a loaded pretrained backbone")
+        names = {name for name, param in unwrapped_model.named_parameters() if param.requires_grad}
+        names.update(name for name, _ in unwrapped_model.named_buffers())
+        model_state_dict = {name: value.cpu() for name, value in model_state_dict.items() if name in names}
+
     checkpoint_dict = {
         "checkpoint_num": checkpoint_num,
         "state_dict": model_state_dict,
@@ -366,6 +378,7 @@ def save_checkpoint(
         "samples_seen": samples_seen,
         "global_step": global_step,
         "shard_shuffle_seed_per_dataset": shard_shuffle_seed_per_dataset,
+        "trainable_only": trainable_only,
     }
     optimizer_dict = {
         "checkpoint_num": checkpoint_num,
@@ -492,9 +505,25 @@ def load_model_checkpoint(model, resume_from_checkpoint):
         model.load_state_dict(sharded_sd, assign=True)
     else:
         model = get_unwrapped_model(model)
-        model.load_state_dict(sd)
+        if checkpoint.get("trainable_only", False):
+            load_trainable_state(model, sd)
+        else:
+            model.load_state_dict(sd)
     logging.info(f"=> resuming checkpoint '{resume_from_checkpoint}' (checkpoint {start_checkpoint_num})")
     return start_checkpoint_num, global_step, shard_shuffle_seed_per_dataset
+
+
+def load_trainable_state(model, state):
+    """Restore a compact checkpoint only onto its already-loaded pretrained backbone."""
+    backbone = model.vision_language_backbone._model
+    if not getattr(backbone, "pretrained_loaded", False):
+        raise ValueError("Load the pretrained backbone before restoring a compact checkpoint")
+    required = {name for name, param in model.named_parameters() if param.requires_grad}
+    if missing := required - state.keys():
+        raise ValueError(f"Compact checkpoint is missing trainable parameters: {sorted(missing)}")
+    incompatible = model.load_state_dict(state, strict=False)
+    if incompatible.unexpected_keys:
+        raise ValueError(f"Unexpected checkpoint keys: {incompatible.unexpected_keys}")
 
 
 def load_ema_checkpoint(model_or_ema, resume_from_checkpoint):

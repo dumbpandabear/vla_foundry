@@ -1,5 +1,6 @@
 import copy
 import logging
+import os
 import random
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -218,7 +219,10 @@ def get_datastring_input(
     # Build lists of shard names and their sample counts selected for this window.
     shard_list_per_dataset = [[] for i in range(len(manifests))]
     num_samples_list_per_dataset = [[] for i in range(len(manifests))]
-    total_num_workers = num_workers_per_gpu * world_size
+    # WebLoader runs in the main process when num_workers=0, which is still
+    # one shard consumer per rank.  Match get_wds_dataloader's effective
+    # worker count so shard lists remain balanced across distributed ranks.
+    total_num_workers = max(1, num_workers_per_gpu) * world_size
 
     # Greedily add shards until we satisfy both:
     # (a) enough samples for the weighting target, and
@@ -322,14 +326,18 @@ def get_datastring_input(
             next_shard_shuffle_seed_per_dataset[i] += next_shard_idx_per_dataset[i] // len(manifests[i])
         next_shard_idx_per_dataset[i] = next_shard_idx_per_dataset[i] % len(manifests[i])
 
-    # Build WebDataset datastrings per dataset from selected shard names.
+    # Build dataset strings. Traditional WebDataset manifests store extensionless
+    # tar stems; streaming indexes store explicit .jsonl shard names.
     datastrings = []
     for i, manifest_path in enumerate(manifest_paths):
         shard_root_source = "/".join(manifest_path.split("/")[:-1]) + "/"
-        if len(shard_list_per_dataset[i]) > 1:
-            curr_datastring = shard_root_source + "{" + ",".join(shard_list_per_dataset[i]) + "}.tar"
-        elif len(shard_list_per_dataset[i]) == 1:
-            curr_datastring = shard_root_source + shard_list_per_dataset[i][0] + ".tar"
+        shard_names = shard_list_per_dataset[i]
+        explicit_extensions = bool(shard_names) and all(os.path.splitext(name)[1] for name in shard_names)
+        suffix = "" if explicit_extensions else ".tar"
+        if len(shard_names) > 1:
+            curr_datastring = shard_root_source + "{" + ",".join(shard_names) + "}" + suffix
+        elif len(shard_names) == 1:
+            curr_datastring = shard_root_source + shard_names[0] + suffix
         else:
             logging.debug(f"No shards found for dataset {i} in {manifest_path}")
             continue

@@ -40,6 +40,14 @@ class TrainExperimentParams(BaseParams):
     wandb_entity: str = field(default=os.getenv("WANDB_ENTITY"))
     wandb_project_name: str = field(default=os.getenv("WANDB_PROJECT", "vla_foundry"))
     wandb_tags: list[str] = field(default_factory=list)
+    # ``auto`` uses online mode when credentials are available and otherwise
+    # records a complete offline run that can be synced later. This keeps
+    # unattended cluster jobs from failing at startup on credential-less nodes.
+    wandb_mode: str = field(default=os.getenv("WANDB_MODE", "auto"))
+    wandb_run_id: str | None = field(default=os.getenv("WANDB_RUN_ID"))
+    wandb_group: str | None = field(default=os.getenv("WANDB_RUN_GROUP"))
+    wandb_job_type: str = field(default=os.getenv("WANDB_JOB_TYPE", "train"))
+    wandb_notes: str | None = field(default=os.getenv("WANDB_NOTES"))
     log_every_n_steps: int = field(default=20)
     log_level: str = field(default="INFO")
     # Optional path to S3 to which the experiment directory is synced.
@@ -57,6 +65,7 @@ class TrainExperimentParams(BaseParams):
     # Number of checkpoint windows the total budget is split into.
     num_checkpoints: int = field(default=5)
     max_checkpoint_limit: int = field(default=None)
+    validate_on_resume: bool = field(default=False)
 
     # --Validation
     total_val_samples: int = field(default=None)
@@ -117,15 +126,17 @@ class TrainExperimentParams(BaseParams):
         # Dataset-related lists must align in length.
         assert len(self.data.dataset_manifest) == len(self.data.dataset_modality)
         assert len(self.data.dataset_manifest) == len(self.data.dataset_weighting)
+        assert self.wandb_mode in {"auto", "online", "offline", "disabled"}
 
         # Each dataset_modality entry must be a valid pipeline type, and each
         # pipeline accesses type-specific attributes on the DataParams subclass.
         # Validate that each modality is compatible with the data type.
-        valid_modalities = {"text", "text_untokenized", "image_caption", "robotics"}
+        valid_modalities = {"text", "text_untokenized", "image_caption", "robotics", "minecraft_vpt_stream"}
         # Map each modality to the data type(s) whose DataParams subclass exposes
         # the attributes that the corresponding pipeline needs.
         modality_compatible_types = {
             "robotics": {"robotics"},
+            "minecraft_vpt_stream": {"minecraft_vpt_stream"},
             "image_caption": {"image_caption"},
             "text": {"text", "text_untokenized"},
             "text_untokenized": {"text_untokenized"},

@@ -223,6 +223,12 @@ class RoboticsProcessor:
             if key not in processed_batch:
                 processed_batch[key] = value
 
+        # WebDataset collates masks from NPZ as numpy arrays. Model batch
+        # handlers only move tensors to the device; diffusion needs bool tensors.
+        for key in ("past_mask", "future_mask"):
+            if processed_batch.get(key) is not None:
+                processed_batch[key] = torch.as_tensor(processed_batch[key], dtype=torch.bool)
+
         processed_batch["attention_mask_images"] = batch_attention_mask_images
         processed_batch["camera_names"] = self.data_params.camera_names
         processed_batch["images"] = batch_images

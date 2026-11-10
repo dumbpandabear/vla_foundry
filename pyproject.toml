@@ -109,6 +109,9 @@ build-backend = "setuptools.build_meta"
 include = ["vla_foundry*"]
 exclude = ["install*", "sagemaker*", "examples*"]
 
+[tool.setuptools.package-data]
+"vla_foundry.inference.minecraft" = ["software_egl.c"]
+
 [tool.uv.sources]
 # This specifies custom sources for dependencies
 draccus = { git = "https://github.com/marin-community/draccus" }

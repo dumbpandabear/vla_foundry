@@ -71,7 +71,11 @@ def get_loss_function(loss_function_type, hparams):
     but it doesn't need to use the mask. In that case, the mask can be ignored with the wrapper _ignore_mask.
     """
     if loss_function_type == "cross_entropy":
-        loss = CrossEntropyLossWithZLoss(hparams.z_loss_coefficient)
+        configured_weights = getattr(hparams, "class_weights", None)
+        weights = None
+        if isinstance(configured_weights, (list, tuple)):
+            weights = torch.tensor(configured_weights, dtype=torch.float32)
+        loss = CrossEntropyLossWithZLoss(hparams.z_loss_coefficient, weight=weights)
     elif loss_function_type == "mse":
         loss = masked_mse_loss
     else:

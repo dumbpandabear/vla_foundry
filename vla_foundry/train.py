@@ -173,7 +173,11 @@ def train_one_checkpoint(
         optim_step_start = time.time()
         # (Optional) grad clipping
         if cfg.hparams.grad_clip_norm is not None:
-            torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.hparams.grad_clip_norm, norm_type=2.0)
+            grad_norm = torch.nn.utils.clip_grad_norm_(
+                model.parameters(), cfg.hparams.grad_clip_norm, norm_type=2.0
+            )
+            if is_master(cfg):
+                metrics.stats["grad_norm"].update(float(grad_norm))
         optimizer.step()
         metrics.stats["optim_step_time"].update(time.time() - optim_step_start)
 

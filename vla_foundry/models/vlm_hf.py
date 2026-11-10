@@ -12,11 +12,19 @@ class VLMHF(TransformerBase):
     def __init__(self, model_params: VLMHFParams, load_pretrained: bool = True):
         super().__init__(model_params)
         self.model_name = model_params.hf_pretrained
+        self.pretrained_loaded = load_pretrained
+        load_kwargs = {}
+        if model_params.pretrained_dtype:
+            load_kwargs["dtype"] = getattr(torch, model_params.pretrained_dtype)
+        if model_params.attn_implementation:
+            load_kwargs["attn_implementation"] = model_params.attn_implementation
         if load_pretrained:
-            self.model = AutoModelForImageTextToText.from_pretrained(self.model_name, trust_remote_code=True)
+            self.model = AutoModelForImageTextToText.from_pretrained(
+                self.model_name, trust_remote_code=True, **load_kwargs
+            )
         else:
             config = AutoConfig.from_pretrained(self.model_name, trust_remote_code=True)
-            self.model = AutoModelForImageTextToText.from_config(config, trust_remote_code=True)
+            self.model = AutoModelForImageTextToText.from_config(config, trust_remote_code=True, **load_kwargs)
         self._limit_hidden_states_to_last_n = None
         self._setup_model_info()
 
@@ -121,11 +129,48 @@ class VLMHF(TransformerBase):
         # Return the ID of the last token (the newly added one)
         return new_num_tokens - 1
 
+    def enable_lora(self, action_token_id):
+        """Adapt attention and the new probe token while freezing the pretrained weights."""
+        if not self.model_params.lora_rank:
+            return
+        if self.model_params.freeze:
+            raise ValueError("LoRA requires freeze=false; PEFT freezes the base weights itself")
+        from peft import LoraConfig, get_peft_model
+
+        config = LoraConfig(
+            r=self.model_params.lora_rank,
+            lora_alpha=self.model_params.lora_alpha,
+            lora_dropout=self.model_params.lora_dropout,
+            target_modules=self.model_params.lora_target_modules,
+            trainable_token_indices=[action_token_id],
+            bias="none",
+        )
+        self._embedding_dtype = self.model.get_input_embeddings().weight.dtype
+        self.model = get_peft_model(self.model, config)
+        # PEFT keeps the probe parameter in FP32. Preserve the base activation
+        # dtype: Qwen's MoE scatter requires routing weights and logits to match.
+        self.model.get_input_embeddings().register_forward_hook(self._cast_embedding_output)
+        # Transformers 4.57 Qwen3-VL MoE casts routing probabilities to the
+        # hidden-state dtype before scattering into a logits-shaped tensor.
+        # Under autocast these dtypes can differ during evaluation. Match the
+        # gate output to its input, preserving the router's FP32 softmax and
+        # gradients without changing the frozen weights or expert routing.
+        for module in self.model.modules():
+            if type(module).__name__ == "Qwen3VLMoeTextSparseMoeBlock":
+                module.gate.register_forward_hook(self._match_router_output_dtype)
+        self.model.print_trainable_parameters()
+
+    def _cast_embedding_output(self, module, args, output):
+        return output.to(self._embedding_dtype)
+
+    def _match_router_output_dtype(self, module, args, output):
+        return output.to(args[0].dtype)
+
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable=True):
         if hasattr(self.model, "gradient_checkpointing_enable"):
             if enable:
-                self.model.gradient_checkpointing_enable()
+                self.model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
             else:
                 self.model.gradient_checkpointing_disable()
 

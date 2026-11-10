@@ -21,7 +21,7 @@ import yaml
 
 from vla_foundry.data.dataloader import get_datastring_input, get_wds_dataloader
 from vla_foundry.data.utils import load_data_chunks
-from vla_foundry.distributed import get_model_precision, is_master, move_buffers_to_device, wrap_fsdp_ddp
+from vla_foundry.distributed import is_master, move_buffers_to_device, move_model_to_device, wrap_fsdp_ddp
 from vla_foundry.file_utils import (
     collect_preprocessing_configs,
     collect_processing_metadata,
@@ -38,6 +38,7 @@ from vla_foundry.models.ema import create_ema_model
 from vla_foundry.optimizer import create_optimizer, load_optimizer
 from vla_foundry.params.train_experiment_params import TrainExperimentParams
 from vla_foundry.scheduler import create_scheduler
+from vla_foundry.telemetry import initialize_wandb
 from vla_foundry.train import train_one_checkpoint
 from vla_foundry.utils import get_experiment_name, set_random_seed, summarize_datastrings
 from vla_foundry.validate import validate_one_checkpoint
@@ -179,7 +180,7 @@ def main():
     if cfg.distributed.use_distributed:
         model = wrap_fsdp_ddp(model, device, cfg)
     else:
-        model = model.to(device, dtype=get_model_precision(cfg))
+        model = move_model_to_device(model, device, cfg)
 
     # Optionally resume model from a checkpoint or finetune from pretrained weights.
     start_checkpoint_num, global_step = 0, 0
@@ -211,8 +212,9 @@ def main():
         trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
         print(f"Total parameters: {total:,}")
         print(f"Trainable parameters: {trainable:,}")
+        return total, trainable
 
-    count_parameters(model)
+    total_parameters, trainable_parameters = count_parameters(model)
 
     # Optionally resume optimizer state from a checkpoint.
     # This needs to be after torchcompile.
@@ -232,21 +234,23 @@ def main():
     # Create LR scheduler, loss function.
     scheduler = create_scheduler(cfg.hparams, optimizer, cfg.total_train_samples)
     loss = get_loss_function(cfg.hparams.loss_function, cfg.hparams)
+    if isinstance(loss, torch.nn.Module):
+        loss = loss.to(device)
 
-    # Logging.
+    # Logging. A persistent run ID keeps dependency-chained Slurm stages in one
+    # online W&B run; credential-less nodes produce syncable offline records.
+    wandb_run = None
     if cfg.wandb and is_master(cfg):
-        import wandb  # imported lazily to avoid hard dependency when disabled
-
-        logging.debug("Starting wandb.")
-        wandb.init(
-            entity=cfg.wandb_entity,
-            project=cfg.wandb_project_name,
-            name=experiment_name,
-            tags=cfg.wandb_tags,
-            resume=None,
-            config=vars(cfg),
+        wandb_run = initialize_wandb(
+            cfg,
+            experiment_name=experiment_name,
+            experiment_path=experiment_path,
+            global_step=global_step,
+            checkpoint_num=start_checkpoint_num,
+            total_steps=total_steps,
+            total_parameters=total_parameters,
+            trainable_parameters=trainable_parameters,
         )
-        logging.debug("Wandb initialized.")
 
     done_training = global_step >= total_steps
     checkpoint_num = start_checkpoint_num
@@ -260,7 +264,9 @@ def main():
         # Also restore which shards were consumed and how many samples were seen.
         curr_shard_idx_per_dataset, samples_seen = load_data_chunks(cfg.model.resume_from_checkpoint)
 
-    # Load validation dataloader once here to reuse across checkpoints.
+    # Resolve a fixed validation shard set once. Rebuild its loader for each
+    # validation pass: persistent WebLoader workers otherwise retain iterator
+    # state, causing later checkpoints to see different sample counts.
     do_validation = cfg.total_val_samples is not None
     if do_validation:
         val_datastrings, val_num_samples_per_dataset, _, _ = get_datastring_input(
@@ -273,7 +279,17 @@ def main():
             num_workers_per_gpu=cfg.data.num_workers,
             world_size=cfg.distributed.world_size,
         )
-        val_dataloader = get_wds_dataloader(val_datastrings, val_num_samples_per_dataset, 0, cfg)
+
+        def validate_current_model(step, validation_checkpoint_num):
+            val_dataloader = get_wds_dataloader(val_datastrings, val_num_samples_per_dataset, 0, cfg)
+            return validate_one_checkpoint(model, val_dataloader, loss, validation_checkpoint_num, step, cfg)
+
+        # Checkpoints are persisted before validation. Recover that stage when
+        # resuming an interrupted run, before consuming further training data.
+        if cfg.validate_on_resume and start_checkpoint_num > 0:
+            avg_val_loss = validate_current_model(global_step, start_checkpoint_num)
+            if is_master(cfg):
+                logging.info(f"Validation after checkpoint {start_checkpoint_num}: avg_loss={avg_val_loss:.6f}")
 
     # Main training loop
     while not done_training:
@@ -356,14 +372,23 @@ def main():
             shard_shuffle_seed_per_dataset,
             ema_model=ema_model,
         )
+        if wandb_run is not None:
+            wandb_run.log(
+                {
+                    "global_step": global_step,
+                    "samples": samples_seen,
+                    "checkpoint/index": checkpoint_num,
+                    "checkpoint/samples_seen": samples_seen,
+                    "checkpoint/completed": 1,
+                },
+                step=global_step,
+            )
 
         # Validate checkpoint.
         if do_validation and checkpoint_num % cfg.val_every_n_checkpoints == 0:
             if cfg.distributed.use_distributed:
                 torch.distributed.barrier()
-            avg_val_loss = validate_one_checkpoint(
-                model, val_dataloader, loss, 0, global_step, cfg
-            )  # checkpoint_num=0 for val for consistent data and seeding
+            avg_val_loss = validate_current_model(global_step, checkpoint_num)
             if is_master(cfg):
                 logging.info(f"Validation after checkpoint {checkpoint_num}: avg_loss={avg_val_loss:.6f}")
             if cfg.distributed.use_distributed:
@@ -382,8 +407,8 @@ def main():
                 logging.info("Model has seen the desired number of samples. Ending training.")
             break
 
-    if cfg.wandb and is_master(cfg):
-        wandb.finish()
+    if wandb_run is not None:
+        wandb_run.finish()
 
     if cfg.distributed.use_distributed and torch.distributed.is_initialized():
         torch.distributed.destroy_process_group()

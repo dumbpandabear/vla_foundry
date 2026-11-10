@@ -1,0 +1,73 @@
+name: minecraft-vla-poc-v1
+save_path: /storage/home/ericli11/minecraft-vla-poc/runs
+wandb: false
+db_logging: false
+total_train_samples: 4096
+num_checkpoints: 4
+total_val_samples: 128
+log_every_n_steps: 20
+model:
+  type: diffusion_policy
+  vision_language_backbone:
+    type: vlm_foundry_backbone
+    vlm_experiment_dir: examples/minecraft/backbone
+    num_vlm_layers_to_use: 1
+    freeze: false
+  transformer:
+    type: transformer
+    hidden_dim: 128
+    n_layers: 2
+    n_heads: 4
+    vocab_size: 0
+    max_seq_len: 512
+    is_causal: false
+  noise_scheduler:
+    num_timesteps: 100
+    clamp_range: [-1, 1]
+  use_flow_matching_scheduler: true
+  diffusion_step_conditioning: add
+  input_noise_std: 0.0
+  num_action_head_repeats: 1
+data:
+  type: robotics
+  dataset_manifest: [/storage/home/ericli11/minecraft-vla-poc/dataset-v1/train/manifest.jsonl]
+  dataset_statistics: [/storage/home/ericli11/minecraft-vla-poc/dataset-v1/train/stats.json]
+  dataset_modality: [robotics]
+  dataset_weighting: [1.0]
+  val_dataset_manifest: [/storage/home/ericli11/minecraft-vla-poc/dataset-v1/val/manifest.jsonl]
+  val_dataset_statistics: [/storage/home/ericli11/minecraft-vla-poc/dataset-v1/val/stats.json]
+  val_dataset_weighting: [1.0]
+  processor: minecraft_bytes
+  image_size: 224
+  img_num_tokens: 64
+  seq_len: 384
+  max_text_seq_len: 384
+  camera_names: [pov]
+  image_indices: [0]
+  image_names: [pov_t0]
+  action_fields: [vpt_actions]
+  proprioception_fields: []
+  action_dim: 25
+  proprioception_dim: 0
+  lowdim_past_timesteps: 0
+  lowdim_future_timesteps: 7
+  normalization:
+    enabled: false
+  augmentation:
+    enabled: false
+  allow_multiple_epochs: true
+  num_workers: 0
+  prefetch_factor: null
+  shuffle_buffer_size: 128
+  shuffle_initial: 32
+distributed:
+  fsdp: false
+hparams:
+  per_gpu_batch_size: 4
+  global_batch_size: 4
+  lr: 0.0003
+  warmup: '20'
+  loss_function: mse
+  precision: float32
+  torchcompile: false
+  grad_clip_norm: 1.0

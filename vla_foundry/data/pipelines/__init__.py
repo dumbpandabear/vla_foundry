@@ -4,6 +4,7 @@ from itertools import islice
 import webdataset as wds
 
 from vla_foundry.data.pipelines.image_caption import ImageCaptionPipeline
+from vla_foundry.data.pipelines.minecraft_vpt import MinecraftVPTStreamingPipeline
 from vla_foundry.data.pipelines.robotics import RoboticsPipeline
 from vla_foundry.data.pipelines.text import TextPipeline
 from vla_foundry.data.pipelines.text_untokenized import TextUntokenizedPipeline
@@ -37,6 +38,8 @@ def create_wds_pipeline(datastring, modality, batch_size, checkpoint_num, data_p
         pipeline = ImageCaptionPipeline(modality, data_params, batch_size)
     elif modality == "robotics":
         pipeline = RoboticsPipeline(modality, data_params, batch_size)
+    elif modality == "minecraft_vpt_stream":
+        pipeline = MinecraftVPTStreamingPipeline(modality, data_params, batch_size)
     else:
         raise ValueError(f"{modality} webdataset pipeline not supported")
 

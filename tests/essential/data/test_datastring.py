@@ -189,3 +189,20 @@ def test_datastring_text_untokenized_scaling(num_samples, world_size, param_conf
     assert shard_count >= world_size
     # Should be divisible by world_size
     assert shard_count % world_size == 0
+
+
+def test_zero_dataloader_workers_still_balances_shards_across_ranks():
+    datastrings, _, _, _ = get_datastring_input(
+        num_samples=50_000,
+        curr_shard_idx_per_dataset=[0],
+        shard_shuffle_seed_per_dataset=[123],
+        manifest_paths=["tests/essential/shared/dummy_manifest_large.jsonl"],
+        dataset_weighting=None,
+        allow_multiple_epochs=False,
+        num_workers_per_gpu=0,
+        world_size=8,
+    )
+
+    shard_count = len(datastrings[0].split("{")[1].split("}")[0].split(","))
+    assert shard_count >= 8
+    assert shard_count % 8 == 0

@@ -99,11 +99,19 @@ def validate_one_checkpoint(
 
             wandb.log(
                 {
+                    "global_step": step,
                     "val/loss": avg_loss,
                     "val/samples": total_samples,
+                    "val/checkpoint": checkpoint_num,
+                    "val/samples_seen": step * cfg.hparams.global_batch_size,
                 },
                 step=step,
             )
+            if wandb.run is not None:
+                previous_best = wandb.run.summary.get("val/best_loss")
+                if previous_best is None or avg_loss < previous_best:
+                    wandb.run.summary["val/best_loss"] = avg_loss
+                    wandb.run.summary["val/best_checkpoint"] = checkpoint_num
 
     if model_was_training:
         model.train()

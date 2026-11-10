@@ -49,6 +49,9 @@ class DiffusionPolicy(BaseModel):
         if self.proprioception_encode is not None:
             torch.nn.init.xavier_uniform_(self.proprioception_encode.weight)
 
+    def set_grad_checkpointing(self, enable=True):
+        self.vision_language_backbone.set_grad_checkpointing(enable)
+
     def _build_transformer_input(self, backbone_embeddings, time_embeddings, noisy_action, proprio_embeddings=None):
         """Build transformer input by combining conditioning, time, and action embeddings.
 

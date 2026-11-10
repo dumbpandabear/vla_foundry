@@ -1,0 +1,133 @@
+name: minecraft-qwen3-d29-full
+save_path: /storage/home/ericli11/minecraft-vla-poc/runs
+wandb: true
+wandb_mode: auto
+wandb_project_name: minecraft-vla-foundry
+wandb_group: minecraft-discrete29-full
+wandb_job_type: full-corpus-training
+wandb_tags: [minecraft, qwen3-vl, discrete-29, full-corpus, 2000-hours]
+db_logging: false
+# The launcher overrides this with dataset.json:samples.train.
+total_train_samples: 1
+num_checkpoints: 80
+# Variable recording-shard sizes make the shortest DDP rank determine actual
+# coverage. Request 32k to obtain a stable roughly 10k-example held-out set.
+total_val_samples: 32768
+validate_on_resume: true
+log_every_n_steps: 20
+model:
+  vision_language_backbone:
+    type: vlm_backbone
+    hf_pretrained: /checkpoint/data/ericli11/models/Qwen3-VL-30B-A3B-Thinking
+    num_vlm_layers_to_use: 2
+    freeze: false
+    pretrained_dtype: bfloat16
+    attn_implementation: sdpa
+    lora_rank: 16
+    lora_alpha: 32
+    lora_dropout: 0.05
+  transformer:
+    type: transformer
+    hidden_dim: 384
+    n_layers: 6
+    n_heads: 6
+    vocab_size: 0
+    max_seq_len: 1024
+    is_causal: false
+  save_trainable_only: true
+  type: minecraft_discrete_policy
+  horizon: 15
+data:
+  type: robotics
+  dataset_manifest:
+  - /checkpoint/data/ericli11/minecraft-vla-poc/dataset-v2-full/train/manifest.jsonl
+  dataset_statistics:
+  - /checkpoint/data/ericli11/minecraft-vla-poc/dataset-v2-full/train/stats.json
+  dataset_modality:
+  - robotics
+  dataset_weighting:
+  - 1.0
+  val_dataset_manifest:
+  - /checkpoint/data/ericli11/minecraft-vla-poc/dataset-v2-full/val/manifest.jsonl
+  val_dataset_statistics:
+  - /checkpoint/data/ericli11/minecraft-vla-poc/dataset-v2-full/val/stats.json
+  val_dataset_weighting:
+  - 1.0
+  processor: /checkpoint/data/ericli11/models/Qwen3-VL-30B-A3B-Thinking
+  image_size: 224
+  img_num_tokens: 196
+  seq_len: 1024
+  max_text_seq_len: 1024
+  camera_names: [pov]
+  image_indices: [-1, 0]
+  image_names: [pov_t-1, pov_t0]
+  action_fields: [vpt_actions]
+  proprioception_fields: []
+  action_dim: 25
+  proprioception_dim: 0
+  lowdim_past_timesteps: 0
+  lowdim_future_timesteps: 14
+  normalization:
+    enabled: false
+  augmentation:
+    enabled: false
+  allow_multiple_epochs: false
+  # Process in each rank's main process. Forked workers abort inside the Qwen
+  # image/token pipeline; get_datastring_input still balances one shard
+  # consumer per rank when this is zero.
+  num_workers: 0
+  prefetch_factor: 2
+  shuffle_buffer_size: 8192
+  shuffle_initial: 2048
+  processor_kwargs:
+    images_kwargs:
+      size:
+        shortest_edge: 50176
+        longest_edge: 50176
+distributed:
+  fsdp: false
+hparams:
+  per_gpu_batch_size: 32
+  global_batch_size: 256
+  lr: 0.00005
+  lr_scheduler: cosine
+  warmup: '2000'
+  beta1: 0.9
+  beta2: 0.95
+  wd: 0.01
+  loss_function: cross_entropy
+  class_weights:
+  - 1.397993
+  - 1.372327
+  - 6.797607
+  - 1.0
+  - 3.061618
+  - 8.0
+  - 8.0
+  - 8.0
+  - 8.0
+  - 8.0
+  - 8.0
+  - 8.0
+  - 8.0
+  - 8.0
+  - 2.737455
+  - 2.750905
+  - 5.404606
+  - 5.728413
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 2.288369
+  - 8.0
+  - 8.0
+  precision: amp_bf16
+  torchcompile: false
+  grad_clip_norm: 1.0
+  grad_checkpointing: true
+  z_loss_coefficient: 0.0
